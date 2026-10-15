@@ -1,0 +1,71 @@
+# TP 3 – Cluster Spark Standalone + HDFS, en conteneurs
+#
+#   cd jour1/TP3_cluster
+#   docker compose up -d
+#   docker compose exec namenode hdfs dfs -mkdir -p /data
+#   docker compose exec namenode hdfs dfs -put /workspace/data/trips.csv /workspace/data/taxi_zone_lookup.csv /data
+#   docker compose exec spark-master spark-submit --master spark://spark-master:7077 \
+#        /workspace/jour1/TP3_cluster/tp2_cluster.py hdfs://namenode:8020/data
+#
+# Interfaces : HDFS http://localhost:9870 — Spark master http://localhost:8080
+#
+# ⚠ Alignez SPARK_VERSION (fichier .env) sur votre `pip show pyspark` : le driver et les
+#   executors doivent avoir la même version. Vérifiez le tag sur hub.docker.com/r/apache/spark/tags.
+#   À valider sur votre poste AVANT la session (docker compose up, puis les 4 commandes ci-dessus).
+
+services:
+  namenode:
+    image: apache/hadoop:${HADOOP_VERSION:-3.4.1}
+    hostname: namenode
+    command: ["hdfs", "namenode"]
+    ports:
+      - "9870:9870"   # UI HDFS
+      - "8020:8020"   # RPC NameNode
+    env_file: ./conf/hadoop.env
+    environment:
+      ENSURE_NAMENODE_DIR: "/tmp/hadoop-root/dfs/name"
+    volumes:
+      - ../..:/workspace
+
+  datanode:
+    image: apache/hadoop:${HADOOP_VERSION:-3.4.1}
+    command: ["hdfs", "datanode"]
+    env_file: ./conf/hadoop.env
+    depends_on:
+      - namenode
+
+  spark-master:
+    image: apache/spark:${SPARK_VERSION:-4.0.0}-python3
+    hostname: spark-master
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master", "--host", "spark-master"]
+    ports:
+      - "8080:8080"   # UI du master
+      - "7077:7077"
+    env_file: ./conf/hadoop.env
+    environment:
+      SPARK_NO_DAEMONIZE: "true"
+    volumes:
+      - ../..:/workspace
+
+  spark-worker-1:
+    image: apache/spark:${SPARK_VERSION:-4.0.0}-python3
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077", "--cores", "2", "--memory", "2g"]
+    env_file: ./conf/hadoop.env
+    environment:
+      SPARK_NO_DAEMONIZE: "true"
+    depends_on:
+      - spark-master
+    volumes:
+      - ../..:/workspace
+
+  # Bonus : un second worker — décommentez, puis `docker compose up -d` et comparez les temps
+  # spark-worker-2:
+  #   image: apache/spark:${SPARK_VERSION:-4.0.0}-python3
+  #   command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077", "--cores", "2", "--memory", "2g"]
+  #   env_file: ./conf/hadoop.env
+  #   environment:
+  #     SPARK_NO_DAEMONIZE: "true"
+  #   depends_on:
+  #     - spark-master
+  #   volumes:
+  #     - ../..:/workspace

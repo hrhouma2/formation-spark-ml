@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<!-- core-site.xml : où est le système de fichiers par défaut ? -->
+<configuration>
+  <property>
+    <name>fs.defaultFS</name>
+    <value>hdfs://namenode:8020</value>
+  </property>
+</configuration>

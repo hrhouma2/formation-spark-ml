@@ -1,0 +1,13 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+out/
+spark-warehouse/
+metastore_db/
+derby.log
+*.log
+jour1/TP3_cluster/.env
+data/_yellow_full.parquet
+.DS_Store

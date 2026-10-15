@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<!-- hdfs-site.xml : comment stocker les blocs ? -->
+<configuration>
+  <property>
+    <name>dfs.replication</name>
+    <value>1</value>   <!-- 3 en production ; 1 suffit avec un seul DataNode -->
+  </property>
+  <property>
+    <name>dfs.namenode.name.dir</name>
+    <value>/tmp/hadoop-root/dfs/name</value>
+  </property>
+  <property>
+    <name>dfs.blocksize</name>
+    <value>134217728</value>   <!-- 128 Mo -->
+  </property>
+</configuration>

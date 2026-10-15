@@ -1,0 +1,6 @@
+pyspark>=4.0,<5
+jupyter
+pandas
+pyarrow
+nbformat
+requests
