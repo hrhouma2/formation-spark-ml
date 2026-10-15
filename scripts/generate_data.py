@@ -14,6 +14,7 @@ Pour utiliser les VRAIES données TLC à la place : scripts/download_official.py
 """
 import argparse
 import csv
+import math
 import os
 import random
 from datetime import datetime, timedelta
@@ -121,10 +122,19 @@ def gen_trips(n, seed, zone_rows):
         airport_fee = 1.75 if pu in AIRPORTS else 0.0
         tolls = round(rng.choice([0.0] * 8 + [6.94, 10.17]), 2) if airport else 0.0
         payment = rng.choices([1, 2, 3, 4], weights=[75, 22, 2, 1])[0]
-        subtotal = fare + extra + mta + improvement + congestion + airport_fee + tolls
-        tip = round(subtotal * rng.choice([0.0, 0.15, 0.2, 0.25, 0.18]), 2) if payment == 1 else 0.0
-        total = round(subtotal + tip, 2)
         passengers = rng.choices([1, 2, 3, 4, 5, 6], weights=[70, 15, 6, 4, 3, 2])[0]
+        subtotal = fare + extra + mta + improvement + congestion + airport_fee + tolls
+        # Pourboire : seuls les pourboires par carte sont enregistrés (comme dans les vraies données TLC).
+        # La probabilité dépend de la course (signal apprenable pour le TP de classification du jour 2).
+        tip = 0.0
+        if payment == 1:
+            manhattan = pu in KNOWN and KNOWN[pu][0] == "Manhattan"
+            night = hour >= 20 or hour < 5
+            score = (-1.2 + 0.18 * min(dist, 20) + 0.9 * night + 1.0 * manhattan
+                     - 0.35 * (passengers - 1) + 0.5 * airport + rng.gauss(0, 0.6))
+            if rng.random() < 1 / (1 + math.exp(-score)):
+                tip = round(subtotal * rng.choice([0.15, 0.18, 0.2, 0.25]), 2)
+        total = round(subtotal + tip, 2)
         yield [rng.choice([1, 2, 2]), pickup.strftime("%Y-%m-%d %H:%M:%S"), dropoff.strftime("%Y-%m-%d %H:%M:%S"),
                passengers, dist, rate, rng.choice(["N"] * 99 + ["Y"]), pu, do, payment, fare, extra, mta, tip,
                tolls, improvement, total, congestion, airport_fee]
