@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Construit les notebooks du jour 1 :
-  - jour1/TPx_*.ipynb          : énoncés (cellules à compléter)
-  - jour1/corriges/TPx_*.ipynb : corrigés, générés depuis les scripts .py (cellules séparées par `# %%`)
+  - jour1/TPx_*.ipynb, jour2/TPx_*.ipynb          : énoncés (cellules à compléter)
+  - jour1/corriges/*.ipynb, jour2/corriges/*.ipynb : corrigés, générés depuis les scripts .py (cellules séparées par `# %%`)
 
     python scripts/build_notebooks.py
 """
@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 J1 = ROOT / "jour1"
+J2 = ROOT / "jour2"
 
 
 def md(t):
@@ -167,3 +168,160 @@ write(J1 / "TP4_spark_sql.ipynb", tp4)
 write(J1 / "corriges" / "TP1_premier_contact.ipynb", corrige_from_py(J1 / "corriges" / "tp1_premier_contact.py", "TP 1 – Premier contact"))
 write(J1 / "corriges" / "TP2_rdd_top10_zones.ipynb", corrige_from_py(J1 / "corriges" / "tp2_rdd.py", "TP 2 – Top 10 des zones avec les RDD"))
 write(J1 / "corriges" / "TP4_spark_sql.ipynb", corrige_from_py(J1 / "corriges" / "tp4_sql.py", "TP 4 – DataFrames et Spark SQL"))
+
+
+# =============================================================== JOUR 2
+SESSION_ML = '''
+from pyspark.sql import SparkSession, functions as F
+from pyspark.ml import Pipeline
+from pyspark.ml.feature import VectorAssembler, StringIndexer, OneHotEncoder, StandardScaler
+spark = SparkSession.builder.appName("TP").master("local[*]").getOrCreate()
+spark.sparkContext.setLogLevel("ERROR")
+zones = spark.read.csv("data/taxi_zone_lookup.csv", header=True, inferSchema=True)
+'''
+
+tp5 = [
+    md("""
+# TP 5 – Explorer avant de prédire (35 min)
+
+**Objectif** : trouver 3 faits dans les données qui guideront nos modèles de l'après-midi.
+
+**Règle d'or** : Spark ne dessine pas. On **agrège** (`groupBy`) ou on **échantillonne** (`sample`) dans Spark,
+puis `toPandas()` sur un petit résultat, puis Matplotlib / Seaborn.
+
+**Réussi si** : 4 graphiques affichés et 3 observations écrites.
+"""),
+    code(RACINE),
+    code(SESSION_ML + '''
+import matplotlib.pyplot as plt
+import seaborn as sns
+sns.set_theme(style="whitegrid")
+trips = (spark.read.parquet("data/trips.parquet")
+         .withColumn("heure", F.hour("tpep_pickup_datetime"))
+         .withColumn("jour_semaine", F.dayofweek("tpep_pickup_datetime"))
+         .join(zones.select(F.col("LocationID").alias("PULocationID"), "Borough"), "PULocationID"))
+trips.cache().count()'''),
+    md("### 1. Distribution des montants : histogramme\n\nIndice : créer une colonne `tranche` = `floor(total_amount / 5) * 5`, puis `groupBy(\"tranche\").count()`, puis `sns.barplot`."),
+    code("tranches = ...\n# sns.barplot(data=tranches, x=\"tranche\", y=\"count\")"),
+    md("### 2. Montant selon la distance : nuage de points sur un **échantillon**\n\nIndice : `trips.sample(fraction=0.03, seed=1)`, puis `plt.scatter`. Limiter les axes : 0–30 miles, 0–120 $."),
+    code("ech = ...\n# plt.scatter(ech.trip_distance, ech.fare_amount, s=5, alpha=0.3)"),
+    md("### 3. Courses par jour de semaine et par heure : heatmap\n\nIndice : `groupBy(\"jour_semaine\", \"heure\").count()`, `toPandas().pivot(index=..., columns=..., values=...)`, `sns.heatmap`."),
+    code("..."),
+    md("### 4. Montant moyen par arrondissement de départ : barres"),
+    code("..."),
+    md("### 5. Vos 3 observations utiles pour **prédire le montant d'une course**\n\nRegardez bien le nuage de points : que signifie la ligne horizontale ?"),
+    md("1. …\n2. …\n3. …"),
+    md("### Bonus – le même nuage de points en Plotly (interactif)\n\n`pip install plotly` puis `plotly.express.scatter(ech, x=..., y=...)`."),
+    code("..."),
+]
+
+tp6 = [
+    md("""
+# TP 6 – Combien va coûter cette course ? (30 min)
+
+**Objectif** : prédire `fare_amount` à partir de la distance, de l'heure, du nombre de passagers et de l'arrondissement
+de départ. Comparer une régression linéaire et un arbre de régression.
+
+**Réussi si** : RMSE de l'arbre < 5 $ sur le test.
+"""),
+    code(RACINE),
+    code(SESSION_ML + '''
+from pyspark.ml.regression import LinearRegression, DecisionTreeRegressor
+from pyspark.ml.evaluation import RegressionEvaluator'''),
+    md("### 1. Les données : ajouter `heure` et `Borough` (jointure avec les zones), garder les courses de distance > 0\n\nColonnes à garder : `trip_distance`, `heure`, `passenger_count`, `Borough`, `fare_amount`."),
+    code("df = (spark.read.parquet(\"data/trips.parquet\")\n      .filter(...)\n      .withColumn(\"heure\", ...)\n      .join(...)\n      .select(...))"),
+    md("### 2. Train / test : 80 / 20, `seed=42`"),
+    code("train, test = ...\nprint(train.count(), test.count())"),
+    md("### 3. La préparation : `StringIndexer` (Borough → index, `handleInvalid=\"keep\"`) → `OneHotEncoder` → `VectorAssembler`"),
+    code("preparation = [\n    ...\n]"),
+    md("### 4. Un pipeline par modèle : `LinearRegression`, puis `DecisionTreeRegressor(maxDepth=6)`\n\nIndice : `Pipeline(stages=preparation + [modele]).fit(train)`, puis `.transform(test)`."),
+    code("..."),
+    md("### 5. Comparer RMSE et R² sur le test\n\nIndice : `RegressionEvaluator(labelCol=\"fare_amount\", metricName=\"rmse\")`. Lequel est le meilleur ? Pourquoi ? (indice : 70 $)"),
+    code("..."),
+    md("### 6. Sauvegarder le meilleur pipeline, puis le recharger\n\nIndice : `model.write().overwrite().save(\"out/modele_montant\")`, `PipelineModel.load(...)`."),
+    code("from pyspark.ml import PipelineModel\n..."),
+    md("### Bonus 1 – `GBTRegressor` fait-il mieux ?"),
+    code("..."),
+    md("### Bonus 2 – « Tricher » : ajoutez `total_amount` aux features. Quel R² ? Pourquoi ce modèle est-il inutilisable ?"),
+    code("..."),
+]
+
+tp7 = [
+    md("""
+# TP 7 – Ce client laissera-t-il un pourboire ? (50 min)
+
+**Objectif** : classer les courses payées **par carte** (les pourboires en espèces ne sont pas enregistrés) :
+pourboire ou pas. Comparer Random Forest et SVM linéaire, tracer la courbe ROC.
+
+**Réussi si** : AUC > 0,65 et courbe ROC tracée.
+"""),
+    code(RACINE),
+    code(SESSION_ML + '''
+from pyspark.ml.classification import RandomForestClassifier, LinearSVC
+from pyspark.ml.evaluation import BinaryClassificationEvaluator
+from pyspark.ml.functions import vector_to_array
+import matplotlib.pyplot as plt'''),
+    md("""
+### 1. Les données
+
+- garder `trip_distance > 0` **et** `payment_type = 1` (carte)
+- `label` = 1.0 si `tip_amount > 0`, sinon 0.0 (`.cast("double")`)
+- features : `trip_distance`, `heure`, `passenger_count`, `manhattan` (Borough == "Manhattan"), `nuit` (heure ≥ 20 ou < 5)
+
+Quel est le taux de pourboire ? Les classes sont-elles équilibrées ?
+"""),
+    code("df = ...\nprint(df.agg(F.avg(\"label\")).first()[0])\ntrain, test = df.randomSplit([0.8, 0.2], seed=7)"),
+    md("### 2. Pipeline : `VectorAssembler` → `StandardScaler` → `RandomForestClassifier(numTrees=50, maxDepth=6)`, puis la même chose avec `LinearSVC`"),
+    code("..."),
+    md("### 3. AUC des deux modèles\n\nIndice : `BinaryClassificationEvaluator(metricName=\"areaUnderROC\")`."),
+    code("..."),
+    md("### 4. Matrice de confusion (Random Forest, seuil 0,5)\n\nIndice : `pred.groupBy(\"label\").pivot(\"prediction\").count()`. Calculez précision et rappel à la main."),
+    code("..."),
+    md("""
+### 5. Courbe ROC en Matplotlib
+
+Récupérer `label` et la probabilité de la classe 1 : `vector_to_array("probability")[1]`, puis `toPandas()` (le test est petit).
+Pour 20 seuils entre 0 et 1, calculer le taux de vrais positifs et le taux de faux positifs, puis `plt.plot(fpr, tpr)`.
+"""),
+    code("scores = ...\n..."),
+    md("### 6. Sauvegarder le meilleur pipeline"),
+    code("..."),
+    md("### Bonus – `CrossValidator` + `ParamGridBuilder` sur `numTrees` et `maxDepth` (3 plis). C'est plus long !"),
+    code("from pyspark.ml.tuning import CrossValidator, ParamGridBuilder\n..."),
+    md("### Bonus 2 – Les vraies données\n\n`python scripts/download_official.py` puis relancez ce notebook. Les résultats sont-ils aussi nets ?"),
+]
+
+tp8 = [
+    md("""
+# TP 8 – Les familles de courses (45 min)
+
+**Objectif** : regrouper les courses en familles **sans étiquette**, avec K-means, à partir de la distance, du montant et de l'heure.
+
+**Réussi si** : k justifié par la silhouette et 3 familles nommées avec des mots métier.
+"""),
+    code(RACINE),
+    code(SESSION_ML + '''
+from pyspark.ml.clustering import KMeans
+from pyspark.ml.evaluation import ClusteringEvaluator'''),
+    md("### 1. `VectorAssembler` (distance, montant, heure) puis `StandardScaler(withMean=True, withStd=True)`"),
+    code("df = ...\nassembleur = ...\nscaler = ..."),
+    md("### 2. `KMeans(k=k, seed=1)` pour k = 2 à 6 ; silhouette de chaque k\n\nIndice : `ClusteringEvaluator(featuresCol=\"features\", metricName=\"silhouette\")`."),
+    code("for k in range(2, 7):\n    ..."),
+    md("### 3. Choisir k, décrire chaque famille\n\nIndice : `groupBy(\"prediction\").agg(count, avg distance, avg montant, avg heure)`."),
+    code("..."),
+    md("### 4. Nommer les familles avec des mots métier"),
+    md("- Famille 0 : …\n- Famille 1 : …\n- Famille 2 : …"),
+    md("### 5. Sans `StandardScaler` : que change-t-il ? Pourquoi ?\n\nIndice : regardez l'heure moyenne de chaque centre (`model.clusterCenters()`)."),
+    code("..."),
+    md("### Bonus – GraphFrames : les zones comme un graphe\n\nSommets = zones (`id`), arêtes = courses (`src` = PULocationID, `dst` = DOLocationID). Top 5 PageRank. Si le package manque : degrés avec `groupBy(\"dst\").count()`."),
+    code("# from graphframes import GraphFrame\n..."),
+]
+
+write(J2 / "TP5_explorer.ipynb", tp5)
+write(J2 / "TP6_regression.ipynb", tp6)
+write(J2 / "TP7_classification.ipynb", tp7)
+write(J2 / "TP8_clustering.ipynb", tp8)
+write(J2 / "corriges" / "TP5_explorer.ipynb", corrige_from_py(J2 / "corriges" / "tp5_explorer.py", "TP 5 – Explorer avant de prédire"))
+write(J2 / "corriges" / "TP6_regression.ipynb", corrige_from_py(J2 / "corriges" / "tp6_regression.py", "TP 6 – Prédire le montant"))
+write(J2 / "corriges" / "TP7_classification.ipynb", corrige_from_py(J2 / "corriges" / "tp7_classification.py", "TP 7 – Prédire le pourboire"))
+write(J2 / "corriges" / "TP8_clustering.ipynb", corrige_from_py(J2 / "corriges" / "tp8_clustering.py", "TP 8 – Les familles de courses"))

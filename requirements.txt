@@ -4,3 +4,7 @@ pandas
 pyarrow
 nbformat
 requests
+matplotlib
+seaborn
+# plotly   (bonus TP 5)
+# graphframes-py   (bonus TP 8, + JAR io.graphframes:graphframes-spark4_2.13)

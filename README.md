@@ -5,6 +5,9 @@ Un seul projet **fil rouge** sur les 3 jours : les courses de taxis jaunes de Ne
 
 > **Jour 1 – Comprendre et utiliser Spark 4** : *quelles zones de New York rapportent le plus, et à quelle heure ?*
 > Résolu 3 fois, pour comparer : avec les RDD, sur un cluster + HDFS, puis en Spark SQL.
+>
+> **Jour 2 – Machine Learning** : *combien va coûter cette course ? Ce client laissera-t-il un pourboire ? Quelles familles de courses ?*
+> Régression, classification, clustering, sur le même jeu de données.
 
 ## Démarrage rapide (participants)
 
@@ -24,14 +27,20 @@ Prérequis détaillés : [docs/prerequis.md](docs/prerequis.md).
 
 ```
 data/                      fil rouge : trips.csv (120 000 courses), trips.parquet, taxi_zone_lookup.csv
-jour1/
+jour1/                     Comprendre et utiliser Spark 4
   TP1_premier_contact.ipynb        30 min   SparkSession, chargement, Spark UI
   TP2_rdd_top10_zones.ipynb        30 min   RDD, PairRDD, reduceByKey, join, stages
   TP3_cluster/                     50 min   cluster Standalone (local ou Docker) + HDFS
   TP4_spark_sql.ipynb              45 min   DataFrames, schéma, SQL, partitionBy, explain, ANSI
   corriges/                        corrigés (notebooks + scripts .py exécutables)
-quiz/quiz_jour1.md         quiz express de fin de matinée (avec réponses)
-formateur/                 checklist du jour 1, mode dégradé, mail de prérequis
+jour2/                     Machine Learning avec Spark ML
+  TP5_explorer.ipynb               35 min   visualiser avant de modéliser (Matplotlib, Seaborn)
+  TP6_regression.ipynb             30 min   Pipeline, régression linéaire vs arbre, RMSE / R², persistance
+  TP7_classification.ipynb         50 min   Random Forest vs SVM, matrice de confusion, ROC / AUC
+  TP8_clustering.ipynb             45 min   K-means + silhouette, bonus GraphFrames
+  corriges/                        corrigés (notebooks + scripts .py exécutables)
+quiz/                      quiz des jours 1 et 2 (avec réponses)
+formateur/                 checklists des jours 1 et 2, mode dégradé, mail de prérequis
 scripts/                   generate_data.py, download_official.py, check_env.py, build_notebooks.py
 ```
 
