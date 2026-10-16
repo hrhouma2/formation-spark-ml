@@ -41,7 +41,9 @@ print("Exemple de lecture : « courtes urbaines de jour », « courtes de nuit �
 brut = Pipeline(stages=[assembleur, KMeans(k=3, seed=1, featuresCol="brut")]).fit(df)
 print("Centres SANS normalisation (distance, montant, heure) :")
 for c in brut.stages[-1].clusterCenters():
-    print("  ", [round(v, 1) for v in c], "← l'heure est identique partout : elle n'a joué aucun rôle")
+    print("  ", [round(float(v), 1) for v in c], "← l'heure est identique partout : elle n'a joué aucun rôle")
+# Attention : la silhouette SANS normalisation est plus élevée, mais elle est calculée dans un autre espace :
+# on ne compare pas des silhouettes calculées sur des features différentes.
 
 # %% Bonus – GraphFrames : les zones comme un graphe (sommets = zones, arêtes = courses)
 #    pip install graphframes-py  +  spark.jars.packages=io.graphframes:graphframes-spark4_2.13:<version>

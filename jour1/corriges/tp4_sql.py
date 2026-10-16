@@ -36,16 +36,17 @@ top10 = spark.sql("""
 """)
 top10.show(truncate=False)
 
-# %% 3b. Montant moyen par heure de la journée
+# %% 3b. Nombre de courses et chiffre d'affaires par heure : à quelle heure New York rapporte-t-il le plus ?
 par_heure = spark.sql("""
     SELECT HOUR(tpep_pickup_datetime) AS heure,
-           ROUND(AVG(total_amount), 2) AS montant_moyen,
-           COUNT(*) AS courses
+           COUNT(*) AS courses,
+           ROUND(SUM(total_amount), 0) AS ca
     FROM trips
     GROUP BY heure
     ORDER BY heure
 """)
 par_heure.show(24)
+# Pic à 18h (≈ 237 600 $), puis 19h et 17h : la sortie des bureaux. Le montant MOYEN, lui, varie peu.
 
 # %% 4. Classement des arrondissements — la même chose avec l'API DataFrame
 par_borough = (trips.join(zones, trips.PULocationID == zones.LocationID)

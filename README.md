@@ -24,7 +24,9 @@ python scripts/check_env.py                              # Java 17+, PySpark 4, 
 
 Puis ouvrez `jour1/TP1_premier_contact.ipynb` dans VS Code (extension Jupyter), **depuis la racine du dépôt**.
 
-Prérequis détaillés : [docs/prerequis.md](docs/prerequis.md).
+Prérequis détaillés : [docs/prerequis.md](docs/prerequis.md). **Sous Windows, utilisez WSL2.**
+
+> Les dossiers `corriges/` sont publiés à la fin de chaque journée : essayez d'abord par vous-même !
 
 ## Contenu
 
@@ -48,8 +50,9 @@ jour3/                     Spark Streaming et Spark à grande échelle
   TP11_ml_streaming_catalyst.ipynb 55 min   modèle ML sur un flux, foreachBatch, Catalyst, Tungsten, AQE
   corriges/                        corrigés (notebooks + scripts .py exécutables)
 quiz/                      quiz des 3 jours (avec réponses) et correction de l'atelier Lambda / Kappa
-formateur/                 checklists des 3 jours, mode dégradé, mail de prérequis
+formateur/                 checklists des 3 jours, mode dégradé, mail de prérequis, publier sans les corrigés
 scripts/                   generate_data.py, download_official.py, stream_simulator.py, check_env.py, build_notebooks.py
+scala/                     corrigés Scala des TP 2, 4, 6, 7, 10 (spark-shell -i), testés : voir scala/README.md
 ```
 
 ## Les données

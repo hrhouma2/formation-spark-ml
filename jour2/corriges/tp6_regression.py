@@ -52,8 +52,24 @@ print("Modèle rechargé :", type(recharge.stages[-1]).__name__)
 
 # %% Bonus 1 – GBTRegressor : des arbres en série, chacun corrige les erreurs du précédent (plus long)
 evaluer("GBT (20 itérations)", GBTRegressor(labelCol="fare_amount", maxIter=20, maxDepth=5))
+# … et un arbre avec la distance SEULE : heure et passagers apportent très peu (≈ 4,8 $ contre ≈ 4,7 $)
+seule = Pipeline(stages=[VectorAssembler(inputCols=["trip_distance"], outputCol="features"),
+                         DecisionTreeRegressor(labelCol="fare_amount", maxDepth=6)]).fit(train).transform(test)
+print(f"Arbre, distance seule  RMSE = {RegressionEvaluator(labelCol='fare_amount', metricName='rmse').evaluate(seule):5.2f} $")
 
-# %% Bonus 2 – « Tricher » avec total_amount : excellent score, modèle inutilisable
+# %% Bonus 2 – Connaître le métier : RatecodeID (2 = forfait JFK) divise l'erreur par deux
+df_rc = (spark.read.parquet("data/trips.parquet").filter("trip_distance > 0")
+         .withColumn("heure", F.hour("tpep_pickup_datetime"))
+         .join(zones.select(F.col("LocationID").alias("PULocationID"), "Borough"), "PULocationID"))
+tr_rc, te_rc = df_rc.randomSplit([0.8, 0.2], seed=42)
+prep_rc = preparation[:2] + [VectorAssembler(inputCols=["trip_distance", "heure", "passenger_count", "borough_vec", "RatecodeID"],
+                                             outputCol="features")]
+p = Pipeline(stages=prep_rc + [DecisionTreeRegressor(labelCol="fare_amount", maxDepth=6)]).fit(tr_rc).transform(te_rc)
+print(f"Arbre + RatecodeID     RMSE = {RegressionEvaluator(labelCol='fare_amount', metricName='rmse').evaluate(p):5.2f} $"
+      "  ← une seule feature métier vaut mieux que tous les réglages")
+
+# %% Bonus 3 – « Tricher » avec total_amount : excellent score, modèle inutilisable
+#    (R² < 1 car total_amount contient aussi le pourboire, les taxes et les péages, qui varient)
 df_triche = (spark.read.parquet("data/trips.parquet").filter("trip_distance > 0")
              .select("trip_distance", "total_amount", "fare_amount"))
 tr2, te2 = df_triche.randomSplit([0.8, 0.2], seed=42)

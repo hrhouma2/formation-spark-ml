@@ -20,8 +20,8 @@
 | 12h00 | **Émargement**, déjeuner | |
 | 13h00 | Partie 3 : Catalyst, Tungsten / AQE, ML sur flux | Faire lire PushedFilters / ReadSchema |
 | 13h25 | **TP 11** (55 min) + partage | Les deux plans montrent PushedFilters : la différence vient du format |
-| 15h00 | Pause | |
-| 15h15 | Partie 4 : Deep Learning, SparkR, atelier Lambda / Kappa, récap | Tenir l'horaire : récap terminé à 16h00 |
+| 14h45 | Pause (avancée de 15 min) | Arrêter les requêtes de streaming |
+| 15h00 | Partie 4 : Deep Learning (10 min), SparkR (5 min), atelier Lambda / Kappa (30 min), récap (15 min) | Tenir l'horaire : récap terminé à 16h00. En retard ? raccourcir l'atelier, jamais le récap |
 | **16h00** | **QCM de validation + questionnaire de satisfaction** (20 min) | Remplir en parallèle le questionnaire intervenant |
 | 16h25 | Conclusion sur la formation (tour de table) | Noter les retours pour l'équipe pédagogique |
 | 16h50 | **Émargement**, merci, restons en contact | Feuille complète pour les 3 jours |

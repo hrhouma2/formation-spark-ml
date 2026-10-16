@@ -71,6 +71,8 @@ tp1 = [
 
 **Objectif** : avoir une SparkSession qui fonctionne, charger les données et lire la Spark UI.
 
+**Réussi si** : 120 000 courses comptées, le schéma affiché, et vous savez retrouver vos jobs dans la Spark UI.
+
 > Ouvrez ce notebook depuis la **racine du dépôt** (les chemins sont relatifs à `data/`).
 """),
     code(RACINE),
@@ -78,9 +80,13 @@ tp1 = [
     code(SESSION),
     md("### 2. Charger `data/trips.csv` (avec en-tête) et compter les lignes\n\nIndice : `spark.read.csv(chemin, header=True, inferSchema=True)` puis `.count()`."),
     code("df = ...\nprint(\"Nombre de courses :\", ...)"),
-    md("### 3. Afficher le schéma et 5 lignes\n\nIndice : `printSchema()`, `select(...)`, `show(5)`."),
+    md("### 3. Afficher le schéma et 5 lignes\n\nIndice : `printSchema()`, puis `df.select(\"tpep_pickup_datetime\", \"PULocationID\", \"trip_distance\", \"total_amount\").show(5)`."),
     code("..."),
-    md("### 4. Ouvrir la Spark UI (lien affiché à l'étape 1) : combien de **jobs** ont été lancés ? Combien de **tâches** pour le `count()` ?\n\nIndice : `df.rdd.getNumPartitions()`"),
+    md("""### 4. Ouvrir la Spark UI (lien affiché à l'étape 1), onglet **Jobs**
+
+- Combien de jobs voyez-vous ? Indice : `inferSchema=True` relit le fichier pour deviner les types : la lecture crée elle-même des jobs, avant votre `count()`.
+- Cliquez sur le job du `count()` : il a **2 stages** (un compte par partition, puis l'addition des comptes). Combien de tâches dans le premier ? Comparez avec `df.rdd.getNumPartitions()`.
+- Si le port 4040 est déjà pris (un autre notebook ouvert), Spark utilise 4041 : le bon lien est `spark.sparkContext.uiWebUrl`."""),
     code("..."),
     md("### Bonus – CSV ou Parquet ?\n\nChronométrez un `count()` sur `data/trips.csv` puis sur `data/trips.parquet`. Lequel est le plus rapide, et pourquoi ?"),
     code("import time\n..."),
@@ -95,7 +101,9 @@ tp2 = [
 
 Colonnes de `trips.csv` (index à partir de 0) : `PULocationID` = colonne **7**, `total_amount` = colonne **16**.
 
-Livrable : ce notebook, poussé sur votre branche Git.
+Livrable : ce notebook, enregistré dans le dépôt (`git checkout -b prenom` puis `git add` / `git commit`).
+
+**Réussi si** : le top 10 affiche les noms des zones, JFK Airport en tête (≈ 261 823 $).
 """),
     code(RACINE),
     code(SESSION),
@@ -116,13 +124,22 @@ Le fichier met tous les champs entre guillemets : préférez `csv.reader` à un 
 import csv
 champs = next(csv.reader([ligne]))   # ['132', 'Queens', 'JFK Airport', 'Airports']
 ```
-Indice : construire un PairRDD `(LocationID, Zone)`, puis `sc.parallelize(top10).join(zones)`.
+Indices :
+- comme pour `trips.csv`, **retirez l'en-tête** du fichier des zones avant de convertir ;
+- ⚠ les clés doivent avoir **le même type des deux côtés** : `int(c[0])`. Avec des clés `'132'` (texte) d'un côté et `132` (entier) de l'autre, le `join` renvoie un résultat **vide, sans aucune erreur** ;
+- construire un PairRDD `(LocationID, Zone)`, puis `sc.parallelize(top10).join(zones)` ;
+- le `join` ne garde pas l'ordre : retriez avec `sortBy(lambda kv: -kv[1][0])`.
 """),
     code("import csv\nzones = ...\nresultat = ...\nfor zid, (ca, nom) in resultat.collect():\n    print(nom, round(ca, 2))"),
     md("### 6. Dans la Spark UI : combien de **stages** pour le calcul du top 10 ? Où est le **shuffle** ?\n\nÉcrivez votre réponse ici :"),
     md("_Votre réponse…_"),
-    md("### Bonus – `groupByKey` contre `reduceByKey`\n\nRefaites l'étape 3 avec `groupByKey().mapValues(sum)` et comparez les temps. Pourquoi cette différence ?"),
-    code("import time\n..."),
+    md("""### Bonus – `groupByKey` contre `reduceByKey`
+
+Refaites l'étape 3 avec `groupByKey().mapValues(sum)` et lancez un `count()` sur chaque version.
+Dans la Spark UI, onglet **Stages**, comparez la colonne **Shuffle Write** des deux stages. Combien de fois plus de données `groupByKey` envoie-t-il sur le réseau ? Pourquoi ?
+
+(Ne comparez pas les temps : sur 120 000 lignes et un seul portable, la différence est noyée dans le bruit. Sur un vrai cluster, c'est le volume du shuffle qui coûte.)"""),
+    code("..."),
 ]
 
 # --------------------------------------------------------------- TP 4
@@ -133,6 +150,8 @@ tp4 = [
 **Objectif** : refaire le TP 2 avec l'API structurée, aller plus loin (heure, arrondissement), et comparer avec les RDD.
 
 Données : `data/trips.parquet` et `data/taxi_zone_lookup.csv`.
+
+**Réussi si** : le top 10 SQL est identique à celui du TP 2, et 31 dossiers `jour=…` sont écrits.
 """),
     code(RACINE),
     code(SESSION),
@@ -150,15 +169,20 @@ l'horodatage est en heure locale sans fuseau (`TimestampNTZType`).
     code("..."),
     md("### 3a. En SQL : le top 10 des zones de départ par chiffre d'affaires, avec le nom de la zone et l'arrondissement\n\nIndice : `JOIN zones z ON t.PULocationID = z.LocationID`, `GROUP BY`, `ORDER BY ... DESC LIMIT 10`."),
     code('top10 = spark.sql("""\n    SELECT ...\n""")\ntop10.show(truncate=False)'),
-    md("### 3b. En SQL : montant moyen par heure de la journée\n\nIndice : `HOUR(tpep_pickup_datetime)`."),
+    md("### 3b. En SQL : nombre de courses et chiffre d'affaires par heure de la journée. À quelle heure New York rapporte-t-il le plus ?\n\nIndice : `HOUR(tpep_pickup_datetime) AS heure`, `COUNT(*)`, `SUM(total_amount)`, `ORDER BY heure`."),
     code('spark.sql("""\n    SELECT ...\n""").show(24)'),
     md("### 4. Avec l'API DataFrame : classement des arrondissements (`Borough`) par chiffre d'affaires\n\nIndice : `join`, `groupBy`, `agg(F.sum(...))`, `orderBy(F.desc(...))`."),
     code("from pyspark.sql import functions as F\npar_borough = ...\npar_borough.show()"),
     md("### 5. Écrire les courses en Parquet, **partitionnées par jour**, dans `out/trips_par_jour`\n\nIndice : `withColumn(\"jour\", F.to_date(...))`, `write.partitionBy(\"jour\").parquet(...)`. Combien de dossiers obtenez-vous ?"),
     code("..."),
-    md("### Bonus 1 – `explain()`\n\nAffichez le plan physique du top 10. Que fait Catalyst avec la jointure (indice : *Broadcast*) ? Comparez la lisibilité et le temps avec le TP 2."),
+    md("### Bonus 1 – `explain()`\n\nAffichez le plan physique du top 10. Que fait Catalyst avec la jointure (indice : *Broadcast*) ? Comparez la lisibilité avec le TP 2, et le temps avec `import time ; t = time.time() ; top10.collect() ; print(time.time() - t)`."),
     code("top10.explain()"),
-    md("### Bonus 2 – ANSI SQL dans Spark 4\n\nCalculez `total_amount / trip_distance`. Que se passe-t-il pour les courses dont la distance vaut 0 ? Corrigez avec `try_divide`."),
+    md("""### Bonus 2 – ANSI SQL dans Spark 4
+
+Calculez `total_amount / trip_distance` **sur les courses de distance nulle** : `spark.sql("SELECT total_amount / trip_distance FROM trips WHERE trip_distance = 0").show()`.
+Que se passe-t-il ? Corrigez avec `try_divide(total_amount, trip_distance)`.
+
+Attention : sans le `WHERE`, un simple `show()` ne lit que les 20 premières lignes, qui n'ont pas de distance nulle : vous ne verriez aucune erreur. Spark est paresseux jusqu'au bout !"""),
     code("..."),
 ]
 
@@ -171,6 +195,13 @@ write(J1 / "corriges" / "TP4_spark_sql.ipynb", corrige_from_py(J1 / "corriges" /
 
 
 # =============================================================== JOUR 2
+SESSION_VIZ = '''
+from pyspark.sql import SparkSession, functions as F
+spark = SparkSession.builder.appName("TP").master("local[*]").getOrCreate()
+spark.sparkContext.setLogLevel("ERROR")
+zones = spark.read.csv("data/taxi_zone_lookup.csv", header=True, inferSchema=True)
+'''
+
 SESSION_ML = '''
 from pyspark.sql import SparkSession, functions as F
 from pyspark.ml import Pipeline
@@ -192,20 +223,20 @@ puis `toPandas()` sur un petit résultat, puis Matplotlib / Seaborn.
 **Réussi si** : 4 graphiques affichés et 3 observations écrites.
 """),
     code(RACINE),
-    code(SESSION_ML + '''
+    code(SESSION_VIZ + '''
 import matplotlib.pyplot as plt
 import seaborn as sns
 sns.set_theme(style="whitegrid")
 trips = (spark.read.parquet("data/trips.parquet")
          .withColumn("heure", F.hour("tpep_pickup_datetime"))
-         .withColumn("jour_semaine", F.dayofweek("tpep_pickup_datetime"))
+         .withColumn("jour_semaine", F.dayofweek("tpep_pickup_datetime"))    # 1 = dimanche, 2 = lundi … 7 = samedi
          .join(zones.select(F.col("LocationID").alias("PULocationID"), "Borough"), "PULocationID"))
 trips.cache().count()'''),
-    md("### 1. Distribution des montants : histogramme\n\nIndice : créer une colonne `tranche` = `floor(total_amount / 5) * 5`, puis `groupBy(\"tranche\").count()`, puis `sns.barplot`."),
+    md("### 1. Distribution des montants payés (`total_amount`) : histogramme\n\nIndice : créer une colonne `tranche` = `floor(total_amount / 5) * 5`, puis `groupBy(\"tranche\").count()`, puis `sns.barplot` ; `plt.xticks(rotation=90)` pour lire les étiquettes."),
     code("tranches = ...\n# sns.barplot(data=tranches, x=\"tranche\", y=\"count\")"),
-    md("### 2. Montant selon la distance : nuage de points sur un **échantillon**\n\nIndice : `trips.sample(fraction=0.03, seed=1)`, puis `plt.scatter`. Limiter les axes : 0–30 miles, 0–120 $."),
+    md("### 2. Tarif du compteur (`fare_amount`, sans pourboire ni taxes) selon la distance : nuage de points sur un **échantillon**\n\nIndice : `trips.sample(fraction=0.03, seed=1)`, puis `plt.scatter`. Limiter les axes : 0–30 miles, 0–120 $. C'est `fare_amount` que nous prédirons au TP 6."),
     code("ech = ...\n# plt.scatter(ech.trip_distance, ech.fare_amount, s=5, alpha=0.3)"),
-    md("### 3. Courses par jour de semaine et par heure : heatmap\n\nIndice : `groupBy(\"jour_semaine\", \"heure\").count()`, `toPandas().pivot(index=..., columns=..., values=...)`, `sns.heatmap`."),
+    md("### 3. Courses par jour de semaine et par heure : heatmap\n\nIndice : `groupBy(\"jour_semaine\", \"heure\").count()`, `toPandas().pivot(index=..., columns=..., values=...)`, `sns.heatmap`.\n\nPiège de lecture : janvier 2024 compte 5 lundis, mardis et mercredis, mais 4 des autres jours. Comparez les **heures** entre elles, pas les jours."),
     code("..."),
     md("### 4. Montant moyen par arrondissement de départ : barres"),
     code("..."),
@@ -232,17 +263,19 @@ from pyspark.ml.evaluation import RegressionEvaluator'''),
     code("df = (spark.read.parquet(\"data/trips.parquet\")\n      .filter(...)\n      .withColumn(\"heure\", ...)\n      .join(...)\n      .select(...))"),
     md("### 2. Train / test : 80 / 20, `seed=42`"),
     code("train, test = ...\nprint(train.count(), test.count())"),
-    md("### 3. La préparation : `StringIndexer` (Borough → index, `handleInvalid=\"keep\"`) → `OneHotEncoder` → `VectorAssembler`"),
+    md("### 3. La préparation : `StringIndexer` (Borough → index, `handleInvalid=\"keep\"`) → `OneHotEncoder` → `VectorAssembler`\n\nIndice : `VectorAssembler(inputCols=[\"trip_distance\", \"heure\", \"passenger_count\", \"borough_vec\"], outputCol=\"features\")` — les modèles cherchent par défaut une colonne nommée `features`."),
     code("preparation = [\n    ...\n]"),
     md("### 4. Un pipeline par modèle : `LinearRegression`, puis `DecisionTreeRegressor(maxDepth=6)`\n\nIndice : `Pipeline(stages=preparation + [modele]).fit(train)`, puis `.transform(test)`."),
     code("..."),
-    md("### 5. Comparer RMSE et R² sur le test\n\nIndice : `RegressionEvaluator(labelCol=\"fare_amount\", metricName=\"rmse\")`. Lequel est le meilleur ? Pourquoi ? (indice : 70 $)"),
+    md("### 5. Comparer RMSE et R² sur le test\n\nIndice : `RegressionEvaluator(labelCol=\"fare_amount\", metricName=\"rmse\")`. Lequel est le meilleur ? Pourquoi ? (indice : le palier à 70 $ du TP 5 ; quel arrondissement contient JFK ?)"),
     code("..."),
     md("### 6. Sauvegarder le meilleur pipeline, puis le recharger\n\nIndice : `model.write().overwrite().save(\"out/modele_montant\")`, `PipelineModel.load(...)`."),
     code("from pyspark.ml import PipelineModel\n..."),
-    md("### Bonus 1 – `GBTRegressor` fait-il mieux ?"),
+    md("### Bonus 1 – `GBTRegressor` fait-il mieux ? Et un arbre avec **la distance seule** ?\n\nQue vous apprend la comparaison sur l'utilité de l'heure et des passagers ?"),
     code("..."),
-    md("### Bonus 2 – « Tricher » : ajoutez `total_amount` aux features. Quel R² ? Pourquoi ce modèle est-il inutilisable ?"),
+    md("### Bonus 2 – Ajoutez la colonne `RatecodeID` (1 = tarif normal, 2 = forfait JFK) aux features. Que devient la RMSE ? Qu'en concluez-vous sur l'importance de **connaître le métier** ?"),
+    code("..."),
+    md("### Bonus 3 – « Tricher » : ajoutez `total_amount` aux features. Quel R² ? Pourquoi ce modèle est-il inutilisable ? Et pourquoi le R² n'atteint-il pas tout à fait 1 ? (indice : que contient `total_amount` en plus du tarif ?)"),
     code("..."),
 ]
 
@@ -264,6 +297,8 @@ import matplotlib.pyplot as plt'''),
     md("""
 ### 1. Les données
 
+- lire `data/trips.parquet` ; `heure` = `F.hour("tpep_pickup_datetime")`
+- joindre les zones pour obtenir `Borough` : `zones.select(F.col("LocationID").alias("PULocationID"), "Borough")`
 - garder `trip_distance > 0` **et** `payment_type = 1` (carte)
 - `label` = 1.0 si `tip_amount > 0`, sinon 0.0 (`.cast("double")`)
 - features : `trip_distance`, `heure`, `passenger_count`, `manhattan` (Borough == "Manhattan"), `nuit` (heure ≥ 20 ou < 5)
@@ -273,7 +308,7 @@ Quel est le taux de pourboire ? Les classes sont-elles équilibrées ?
     code("df = ...\nprint(df.agg(F.avg(\"label\")).first()[0])\ntrain, test = df.randomSplit([0.8, 0.2], seed=7)"),
     md("### 2. Pipeline : `VectorAssembler` → `StandardScaler` → `RandomForestClassifier(numTrees=50, maxDepth=6)`, puis la même chose avec `LinearSVC`"),
     code("..."),
-    md("### 3. AUC des deux modèles\n\nIndice : `BinaryClassificationEvaluator(metricName=\"areaUnderROC\")`."),
+    md("### 3. AUC des deux modèles\n\nIndice : `BinaryClassificationEvaluator(metricName=\"areaUnderROC\")`.\n\nSi LinearSVC affiche `ERROR OWLQN: Failure! Resetting history` : c'est un message interne de l'optimiseur, sans conséquence."),
     code("..."),
     md("### 4. Matrice de confusion (Random Forest, seuil 0,5)\n\nIndice : `pred.groupBy(\"label\").pivot(\"prediction\").count()`. Calculez précision et rappel à la main."),
     code("..."),
@@ -281,10 +316,11 @@ Quel est le taux de pourboire ? Les classes sont-elles équilibrées ?
 ### 5. Courbe ROC en Matplotlib
 
 Récupérer `label` et la probabilité de la classe 1 : `vector_to_array("probability")[1]`, puis `toPandas()` (le test est petit).
-Pour 20 seuils entre 0 et 1, calculer le taux de vrais positifs et le taux de faux positifs, puis `plt.plot(fpr, tpr)`.
+Les probabilités sont concentrées entre 0,3 et 0,7 : prenez comme seuils les **quantiles** des scores (`numpy.quantile(p, numpy.linspace(0, 1, 50))`) plutôt que 20 seuils réguliers.
+Pour chaque seuil, calculer le taux de vrais positifs et le taux de faux positifs, puis `plt.plot(fpr, tpr)`.
 """),
     code("scores = ...\n..."),
-    md("### 6. Sauvegarder le meilleur pipeline"),
+    md("### 6. Sauvegarder le pipeline **Random Forest** dans `out/modele_pourboire`\n\n`rf_model.write().overwrite().save(\"out/modele_pourboire\")`\n\nPourquoi le Random Forest et pas LinearSVC, alors que leurs AUC sont presque égales ? Le TP 11 a besoin d'une **probabilité** (colonne `probability`), que LinearSVC ne fournit pas."),
     code("..."),
     md("### Bonus – `CrossValidator` + `ParamGridBuilder` sur `numTrees` et `maxDepth` (3 plis). C'est plus long !"),
     code("from pyspark.ml.tuning import CrossValidator, ParamGridBuilder\n..."),
@@ -303,15 +339,21 @@ tp8 = [
     code(SESSION_ML + '''
 from pyspark.ml.clustering import KMeans
 from pyspark.ml.evaluation import ClusteringEvaluator'''),
-    md("### 1. `VectorAssembler` (distance, montant, heure) puis `StandardScaler(withMean=True, withStd=True)`"),
+    md("### 1. `VectorAssembler` (`trip_distance`, `total_amount`, `heure`) puis `StandardScaler(withMean=True, withStd=True)`\n\nGardez les courses `trip_distance > 0`."),
     code("df = ...\nassembleur = ...\nscaler = ..."),
     md("### 2. `KMeans(k=k, seed=1)` pour k = 2 à 6 ; silhouette de chaque k\n\nIndice : `ClusteringEvaluator(featuresCol=\"features\", metricName=\"silhouette\")`."),
     code("for k in range(2, 7):\n    ..."),
-    md("### 3. Choisir k, décrire chaque famille\n\nIndice : `groupBy(\"prediction\").agg(count, avg distance, avg montant, avg heure)`."),
+    md("### 3. Choisir k, décrire chaque famille\n\nIndice : `groupBy(\"prediction\").agg(count, avg distance, avg montant, avg heure)`.\n\nSi deux k ont une silhouette presque égale, choisissez celui dont les familles ont le plus de **sens métier**."),
     code("..."),
     md("### 4. Nommer les familles avec des mots métier"),
     md("- Famille 0 : …\n- Famille 1 : …\n- Famille 2 : …"),
-    md("### 5. Sans `StandardScaler` : que change-t-il ? Pourquoi ?\n\nIndice : regardez l'heure moyenne de chaque centre (`model.clusterCenters()`)."),
+    md("""### 5. Sans `StandardScaler` : que change-t-il ? Pourquoi ?
+
+Indice : regardez l'heure moyenne de chaque centre : `[[round(float(v), 1) for v in c] for c in model.stages[-1].clusterCenters()]`.
+
+⚠ Ne comparez pas les silhouettes avec et sans normalisation : elles sont calculées dans des espaces différents. Une silhouette plus haute sans scaler ne veut pas dire « meilleur modèle ».
+
+Pour aller plus loin : l'heure est traitée comme un nombre, donc 23 h et 0 h sont « loin ». Comment pourrait-on corriger cela ?"""),
     code("..."),
     md("### Bonus – GraphFrames : les zones comme un graphe\n\nSommets = zones (`id`), arêtes = courses (`src` = PULocationID, `dst` = DOLocationID). Top 5 PageRank. Si le package manque : degrés avec `groupBy(\"dst\").count()`."),
     code("# from graphframes import GraphFrame\n..."),
@@ -355,11 +397,15 @@ tp9 = [
     code("zones = ...\nenrichies = ..."),
     md("### 3. Chiffre d'affaires et nombre de courses par `Borough`"),
     code("par_borough = ..."),
-    md("### 4. Démarrer la requête : `outputMode(\"complete\")`, `format(\"console\")`, `trigger(processingTime=\"5 seconds\")`, un `checkpointLocation`\n\nLaissez tourner 60 secondes : `q.awaitTermination(60)`, puis `q.stop()`. Le résultat s'affiche dans le terminal de Jupyter / VS Code."),
-    code("q = (par_borough.writeStream\n     ...\n     .start())\nq.awaitTermination(60)\nq.stop()"),
+    md("""### 4. Démarrer la requête : `outputMode("complete")`, `format("console")`, `trigger(processingTime="5 seconds")`, un `checkpointLocation`
+
+Laissez tourner 60 secondes : `q.awaitTermination(60)`, puis `q.stop()`. Les tableaux s'affichent sous la cellule, un par micro-batch.
+
+⚠ Le checkpoint est la **mémoire** de la requête : si vous relancez après un `--reset` du simulateur, supprimez-le d'abord (première ligne de la cellule), sinon la requête reprend l'ancien état et ignore les nouveaux fichiers."""),
+    code("import shutil\nshutil.rmtree(\"out/checkpoints/tp9\", ignore_errors=True)   # repartir de zéro\n\nq = (par_borough.writeStream\n     ...\n     .option(\"checkpointLocation\", \"out/checkpoints/tp9\")\n     .start())\nq.awaitTermination(60)\nq.stop()"),
     md("### 5. Le suivi : `q.lastProgress`, `q.recentProgress`\n\nCombien de micro-batches ? Combien de lignes par micro-batch (`numInputRows`) ?"),
     code("..."),
-    md("### Bonus – Le même calcul en **batch** (`spark.read`) sur les mêmes fichiers : obtenez-vous les mêmes comptes ?"),
+    md("### Bonus – Le même calcul en **batch** (`spark.read`) sur les mêmes fichiers : obtenez-vous les mêmes comptes ?\n\nSi le stream en a moins : comparez le rythme du simulateur (1 fichier toutes les 2 s) et `maxFilesPerTrigger` (2 fichiers par micro-batch de 5 s). Le stream a-t-il pris du retard ? Que se passe-t-il si on le laisse tourner plus longtemps ?"),
     code("..."),
 ]
 
@@ -368,16 +414,16 @@ tp10 = [
     code(RACINE),
     code(SESSION_STREAM),
     md("### 1. Lire les logs en continu (`readStream.text`) : une colonne `value` par ligne\n\nExemple de ligne :\n```\n2024-01-15T08:22:03.120 ERROR endpoint=/payment status=503 latency_ms=812 zone=161\n```"),
-    code("brut = ..."),
+    code("brut = (spark.readStream\n        .option(\"maxFilesPerTrigger\", 3)   # 3 fichiers par micro-batch : plusieurs micro-batches, même avec --all\n        .text(\"stream/logs\"))"),
     md("### 2. Parser avec `regexp_extract`\n\nMotif fourni :\n```python\nmotif = r\"^(\\S+) +(\\w+) +endpoint=(\\S+) status=(\\d+) latency_ms=(\\d+) zone=(\\d+)$\"\n```\nColonnes : `ts` (`to_timestamp(..., \"yyyy-MM-dd'T'HH:mm:ss.SSS\")`), `niveau`, `endpoint`, `status` (int), `latence_ms` (int)."),
     code("motif = r\"^(\\S+) +(\\w+) +endpoint=(\\S+) status=(\\d+) latency_ms=(\\d+) zone=(\\d+)$\"\nlogs = brut.select(\n    ...\n)"),
-    md("### 3. Watermark de 2 minutes, fenêtre de 1 minute par `endpoint`\n\nCalculer : `requetes` (count), `erreurs` (status >= 500), `taux_erreur`, `latence_p95` (`percentile_approx(latence_ms, 0.95)`)."),
+    md("### 3. Watermark de 2 minutes, fenêtre de 1 minute par `endpoint`\n\nDans `agg` : `requetes` (`count`), `erreurs` (`sum(when(status >= 500, 1).otherwise(0))`), `latence_p95` (`percentile_approx(latence_ms, 0.95)`) ; **puis** `taux_erreur` = `erreurs / requetes` avec `withColumn`."),
     code("par_minute = (logs\n    .withWatermark(...)\n    .groupBy(...)\n    .agg(...))"),
     md("### 4. Écrire en mode **append** vers Parquet (`out/tp10/par_minute`), avec un checkpoint\n\nEn direct : `trigger(processingTime=\"5 seconds\")` et `awaitTermination(120)`. Avec `--all` : `trigger(availableNow=True)`."),
-    code("q = ..."),
+    code("import shutil\nfor d in [\"out/checkpoints/tp10\", \"out/tp10\"]:\n    shutil.rmtree(d, ignore_errors=True)   # repartir de zéro\n\nq = ..."),
     md("### 5. Lire le Parquet (en batch) et afficher les alertes : taux d'erreur > 10 %\n\nQuel endpoint ? À quelles minutes ? Que devient la latence p95 ?"),
     code("..."),
-    md("### 6. Combien de lignes ont été ignorées par le watermark ?\n\nIndice : `q.recentProgress`, champ `stateOperators[0][\"numRowsDroppedByWatermark\"]`.\n\nPourquoi les toutes dernières minutes n'apparaissent-elles pas dans le Parquet ?"),
+    md("### 6. Combien de lignes ont été ignorées par le watermark ?\n\nIndice : `q.recentProgress`, champ `stateOperators[0][\"numRowsDroppedByWatermark\"]`.\n\nPourquoi les toutes dernières minutes n'apparaissent-elles pas dans le Parquet ?\n\nÀ noter : `lastProgress` affiche le watermark en **UTC** (`…T13:27:55Z` pour 8h27 à New York), et une fenêtre de 7h52 peut apparaître : ce sont des lignes arrivées avec 8 minutes de retard au tout début du flux."),
     code("..."),
     md("### Bonus – Fenêtre glissante de 5 minutes, toutes les minutes : l'alerte est-elle plus stable ?"),
     code("..."),
@@ -392,19 +438,19 @@ from pyspark.ml.functions import vector_to_array
 import time
 zones = spark.read.csv("data/taxi_zone_lookup.csv", header=True, inferSchema=True).select(
     F.col("LocationID").alias("PULocationID"), "Borough")'''),
-    md("### 1. La préparation des features, dans UNE fonction (la même qu'au TP 7)\n\nCarte uniquement, `heure`, `manhattan`, `nuit`, `label` (pourboire > 0)."),
-    code("def features(df):\n    return (df.filter(\"trip_distance > 0 AND payment_type = 1\")\n              ...)"),
-    md("### 2. Recharger le modèle du TP 7 : `PipelineModel.load(\"out/modele_pourboire\")`\n\nS'il n'existe pas, lancez d'abord `python jour2/corriges/tp7_classification.py`."),
+    md("### 1. La préparation des features, dans UNE fonction réutilisable en batch et en streaming\n\nReprenez les étapes du TP 7 : carte uniquement, `heure`, jointure avec `zones` pour `Borough`, `manhattan`, `nuit`, `label` (pourboire > 0)."),
+    code("def features(df):\n    return (df.filter(\"trip_distance > 0 AND payment_type = 1\")\n              .withColumn(\"heure\", F.hour(\"tpep_pickup_datetime\"))\n              .join(zones, \"PULocationID\")\n              ...)"),
+    md("### 2. Recharger le modèle du TP 7 : `PipelineModel.load(\"out/modele_pourboire\")`\n\nS'il n'existe pas (ou si vous y avez sauvegardé le LinearSVC), réentraînez le Random Forest du TP 7 et sauvegardez-le à cet endroit : le TP a besoin de la colonne `probability`."),
     code("modele = ..."),
     md("### 3. Appliquer le modèle sur le flux\n\n`modele.transform(features(flux))`, puis `p_pourboire` = `vector_to_array(\"probability\")[1]`."),
     code("schema = spark.read.parquet(\"data/trips.parquet\").schema\nflux = ...\npredictions = ..."),
-    md("### 4. Taux de pourboire **prédit** (moyenne de `p_pourboire`) vs **réel** (moyenne de `label`), par fenêtre de 30 min et par `Borough`\n\nWatermark de 10 minutes sur `ts` = `tpep_pickup_datetime` converti en timestamp. Pourquoi la moyenne des probabilités et pas des prédictions 0/1 ?"),
+    md("### 4. Taux de pourboire **prédit** (moyenne de `p_pourboire`) vs **réel** (moyenne de `label`), par fenêtre de 30 min et par `Borough`\n\nWatermark de 10 minutes sur `ts` = `F.col(\"tpep_pickup_datetime\").cast(\"timestamp\")` : le watermark refuse le type `TIMESTAMP_NTZ` (sans fuseau) de nos données, d'où la conversion.\n\nPourquoi la moyenne des probabilités et pas des prédictions 0/1 ?"),
     code("suivi = ..."),
-    md("### 5. `foreachBatch` : pour chaque micro-batch, écrire en Parquet (`out/tp11/suivi`) et afficher le nombre de fenêtres"),
-    code("def traiter(batch_df, batch_id):\n    ...\n\nq = ..."),
-    md("### 6. Sous le capot : `explain(\"formatted\")` sur la même requête, en CSV puis en Parquet\n\n```python\nrequete = lambda df: df.filter(\"trip_distance > 10\").groupBy(\"PULocationID\").agg(F.avg(\"total_amount\"))\n```\nComparez `PushedFilters`, `ReadSchema`, `Batched`. Mesurez le temps de chaque version (3 exécutions)."),
+    md("### 5. `foreachBatch` en `outputMode(\"append\")` : pour chaque micro-batch, écrire en Parquet (`out/tp11/suivi`) et afficher le nombre de fenêtres\n\nLe premier micro-batch écrit 0 fenêtre : aucune n'est encore close par le watermark. C'est normal."),
+    code("import shutil\nfor d in [\"out/checkpoints/tp11\", \"out/tp11\"]:\n    shutil.rmtree(d, ignore_errors=True)\n\ndef traiter(batch_df, batch_id):\n    ...\n\nq = ..."),
+    md("### 6. Sous le capot : `explain(\"formatted\")` sur la même requête, en CSV puis en Parquet\n\n```python\nrequete = lambda df: df.filter(\"trip_distance > 10\").groupBy(\"PULocationID\").agg(F.avg(\"total_amount\"))\n```\nComparez `PushedFilters`, `ReadSchema` et `Batched`. Surprise : Catalyst pousse le filtre et élague les colonnes **dans les deux cas**. Qu'est-ce qui diffère, alors ? Mesurez le temps de chaque version (moyenne de 3 exécutions)."),
     code("..."),
-    md("### 7. AQE : exécutez la requête Parquet, puis `explain()`. Trouvez `isFinalPlan=true` et `AQEShuffleRead`. Combien de blocs `*(n)` (whole-stage codegen) ?"),
+    md("### 7. AQE : le plan final n'existe qu'**après** l'exécution, sur **le même objet** DataFrame :\n\n```python\nr = requete(pq)\nr.collect()\nr.explain()\n```\nTrouvez `isFinalPlan=true` et `AQEShuffleRead coalesced`. Combien de blocs `*(n)` (whole-stage codegen) ? (Avec `requete(pq).explain()` vous obtiendriez un nouvel objet, encore `isFinalPlan=false`.)"),
     code("..."),
     md("### Bonus – Spark UI, onglet **Structured Streaming** : débit, durée des micro-batches, lignes d'état"),
 ]

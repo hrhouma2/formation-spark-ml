@@ -54,7 +54,8 @@ for nom, imp in sorted(zip(assembleur.getInputCols(), rf.featureImportances.toAr
 # %% 5. Courbe ROC en Matplotlib : le test est petit → toPandas() est raisonnable
 scores = rf_pred.select("label", vector_to_array("probability")[1].alias("p")).toPandas()
 y, p = scores.label.values, scores.p.values
-seuils = [i / 20 for i in range(21)]
+import numpy as np
+seuils = list(np.quantile(p, np.linspace(0, 1, 50))) + [1.01]   # seuils = quantiles : points bien répartis sur la courbe
 tpr = [((p >= t) & (y == 1)).sum() / (y == 1).sum() for t in seuils]
 fpr = [((p >= t) & (y == 0)).sum() / (y == 0).sum() for t in seuils]
 plt.figure(figsize=(5, 5))

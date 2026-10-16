@@ -107,6 +107,10 @@ def main():
     a = ap.parse_args()
     if a.reset:
         shutil.rmtree(os.path.join(ROOT, "stream", a.flux), ignore_errors=True)
+        # les checkpoints des requêtes qui lisaient ce flux ne sont plus valables : on les supprime aussi
+        for tp in (["tp9", "tp11"] if a.flux == "courses" else ["tp10"]):
+            shutil.rmtree(os.path.join(ROOT, "out", "checkpoints", tp), ignore_errors=True)
+        print(f"stream/{a.flux} et les checkpoints associés ont été vidés")
     courses(a) if a.flux == "courses" else logs(a)
 
 

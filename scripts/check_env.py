@@ -72,6 +72,25 @@ if ok:
         spark = SparkSession.builder.appName("check_env").master("local[*]").getOrCreate()
         n = spark.range(1_000_000).count()
         check(f"SparkSession OK — Spark {spark.version}, count = {n:,}", n == 1_000_000)
+        # Écrire et relire un fichier : c'est là que les postes Windows échouent souvent (winutils / HADOOP_HOME)
+        import tempfile, os
+        tmp = tempfile.mkdtemp(prefix="check_spark_")
+        try:
+            spark.range(1000).write.mode("overwrite").parquet(os.path.join(tmp, "test.parquet"))
+            ok_ecrit = spark.read.parquet(os.path.join(tmp, "test.parquet")).count() == 1000
+            check("Écriture / lecture Parquet", ok_ecrit)
+        except Exception as e:
+            check("Écriture / lecture Parquet", False,
+                  f"{type(e).__name__} – sous Windows : utiliser WSL2 (recommandé) ou installer winutils + HADOOP_HOME, voir docs/prerequis.md")
+        # Un mini stream avec checkpoint (jour 3)
+        try:
+            q = (spark.readStream.format("rate").option("rowsPerSecond", 10).load()
+                 .writeStream.format("memory").queryName("check_stream")
+                 .option("checkpointLocation", os.path.join(tmp, "chk")).trigger(availableNow=True).start())
+            q.awaitTermination(60)
+            check("Streaming + checkpoint", q.exception() is None)
+        except Exception as e:
+            check("Streaming + checkpoint", False, f"{type(e).__name__} : {str(e)[:150]}")
         spark.stop()
     except Exception as e:
         check("SparkSession", False, f"{type(e).__name__} : {str(e)[:200]}")

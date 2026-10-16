@@ -10,14 +10,21 @@ Le script `tp2_cluster.py` est le TP 2 corrigé, sans `.master()` dans le code :
 Linux, macOS ou WSL2, depuis la racine du dépôt :
 
 ```bash
-source jour1/TP3_cluster/start_cluster_local.sh
+bash jour1/TP3_cluster/start_cluster_local.sh        # venv activé
 # → Master : spark://127.0.0.1:7077, UI http://localhost:8080 — 1 worker, 2 cœurs
 spark-submit --master spark://127.0.0.1:7077 jour1/TP3_cluster/tp2_cluster.py data
 ```
 
 1. Ouvrez http://localhost:8080 : combien de workers ? de cœurs ? Repérez votre application « TP3-cluster ».
 2. Dans l'UI de l'application (port 4040 pendant l'exécution), retrouvez les stages du TP 2.
-3. **Bonus** : lancez un second worker (commande affichée par le script) et relancez le `spark-submit`. Comparez le temps.
+3. **Bonus** : lancez un second worker (commande affichée par le script) et relancez le `spark-submit`.
+   Dans l'UI du master, comment les tâches se répartissent-elles ? Le job est-il plus rapide ?
+   (Sur un portable de 2 à 4 cœurs avec 120 000 lignes, souvent non : les deux workers se partagent les mêmes
+   cœurs physiques, et le coût de coordination dépasse le gain. Un cluster ne paie qu'avec de vraies machines et de vrais volumes.)
+
+> Pourquoi le chemin `data` fonctionne-t-il ? Ici, driver et workers partagent le même disque. Sur un vrai cluster,
+> chaque worker doit voir les données : d'où HDFS (partie B) ou un stockage objet (S3, ADLS).
+> L'UI de l'application est sur le port 4040 (ou 4041 si un notebook est encore ouvert).
 
 Arrêt : `jour1/TP3_cluster/stop_cluster_local.sh`
 

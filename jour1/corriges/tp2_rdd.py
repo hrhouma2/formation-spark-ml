@@ -1,7 +1,6 @@
 # TP 2 – Top 10 des zones avec les RDD (corrigé)
 # Lancer : python jour1/corriges/tp2_rdd.py
 import csv
-import time
 from pyspark.sql import SparkSession
 
 spark = SparkSession.builder.appName("TP2-rdd").master("local[*]").getOrCreate()
@@ -42,10 +41,15 @@ for rang, (zid, (ca, nom)) in enumerate(resultat.collect(), 1):
 #    reduceByKey = transformation wide → 1 shuffle → le job a 2 stages.
 #    Le join et le sortBy ajoutent d'autres shuffles (donc d'autres stages).
 
-# %% Bonus – groupByKey vs reduceByKey
-t = time.time(); ca_par_zone.count(); t_reduce = time.time() - t
-t = time.time(); paires.groupByKey().mapValues(sum).count(); t_group = time.time() - t
-print(f"\nreduceByKey : {t_reduce:.2f} s — groupByKey : {t_group:.2f} s")
-# groupByKey envoie TOUTES les valeurs sur le réseau ; reduceByKey additionne d'abord localement.
+# %% Bonus – groupByKey vs reduceByKey : comparer le volume du SHUFFLE (pas le temps, trop bruité sur un portable)
+import json, urllib.request
+sc.setJobGroup("reduce", "reduceByKey"); paires.reduceByKey(lambda a, b: a + b).count()
+sc.setJobGroup("group", "groupByKey");   paires.groupByKey().mapValues(sum).count()
+stages = json.load(urllib.request.urlopen(f"{sc.uiWebUrl}/api/v1/applications/{sc.applicationId}/stages"))
+for st in stages:                                  # ce que montre la colonne « Shuffle Write » de l'onglet Stages
+    if st["shuffleWriteBytes"] and ("reduceByKey" in st["name"] or "groupByKey" in st["name"]):
+        print(f"{st['name'].split(' at ')[0]:12s} shuffle write = {st['shuffleWriteBytes'] / 1024:8.1f} Ko")
+# groupByKey envoie TOUTES les valeurs sur le réseau (~480 Ko) ; reduceByKey additionne d'abord sur chaque
+# partition et n'envoie qu'un total par zone (~7 Ko) : environ 70 fois moins de données échangées.
 
 spark.stop()

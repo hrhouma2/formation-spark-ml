@@ -14,8 +14,19 @@ nous préparerons un environnement de secours.
 | **VS Code** | récente | – | [code.visualstudio.com](https://code.visualstudio.com) + extensions **Python** et **Jupyter** |
 | **Docker Desktop** (TP 3 partie B, optionnel) | récente | `docker compose version` | [docker.com](https://www.docker.com/products/docker-desktop/) – 4 Go de RAM alloués |
 
-Windows : les TP 1, 2 et 4 fonctionnent nativement. Pour le TP 3, utilisez **WSL2** (Ubuntu) ou Docker Desktop.
-Si `java` n'est pas trouvé par PySpark, définissez `JAVA_HOME` (Windows : variables d'environnement système).
+### Vous êtes sous Windows ? Utilisez WSL2 (fortement recommandé)
+
+Spark est conçu pour Linux. Sous Windows natif, l'**écriture de fichiers** (Parquet, checkpoints de streaming)
+échoue souvent sans les binaires Hadoop `winutils.exe` / `hadoop.dll` et la variable `HADOOP_HOME`, et plusieurs
+TP (3, 4, 6, 7, 10, 11) écrivent des fichiers. La solution la plus fiable :
+
+1. Installer **WSL2** avec Ubuntu : `wsl --install` dans PowerShell administrateur, puis redémarrer.
+2. Dans Ubuntu : `sudo apt install openjdk-17-jdk python3-venv git`, puis suivre l'étape 2 ci-dessous.
+3. Dans VS Code : extension **WSL**, puis « Connect to WSL » et ouvrir le dossier du dépôt.
+
+Si vous restez en Windows natif : PowerShell peut refuser d'activer le venv →
+`Set-ExecutionPolicy RemoteSigned -Scope CurrentUser`. Si `java` n'est pas trouvé, définissez `JAVA_HOME`.
+`check_env.py` teste une vraie écriture Parquet : s'il échoue sur ce point, passez à WSL2 ou signalez-le-nous.
 
 ## 2. Le dépôt et PySpark
 
