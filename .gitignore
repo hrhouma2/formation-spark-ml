@@ -11,3 +11,4 @@ derby.log
 jour1/TP3_cluster/.env
 data/_yellow_full.parquet
 .DS_Store
+stream/

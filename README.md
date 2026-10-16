@@ -8,6 +8,9 @@ Un seul projet **fil rouge** sur les 3 jours : les courses de taxis jaunes de Ne
 >
 > **Jour 2 – Machine Learning** : *combien va coûter cette course ? Ce client laissera-t-il un pourboire ? Quelles familles de courses ?*
 > Régression, classification, clustering, sur le même jeu de données.
+>
+> **Jour 3 – Streaming** : *voir le chiffre d'affaires en direct, détecter une panne dans les logs, prédire le pourboire en temps réel.*
+> `scripts/stream_simulator.py` fait arriver courses et logs fichier par fichier, comme en production.
 
 ## Démarrage rapide (participants)
 
@@ -39,9 +42,14 @@ jour2/                     Machine Learning avec Spark ML
   TP7_classification.ipynb         50 min   Random Forest vs SVM, matrice de confusion, ROC / AUC
   TP8_clustering.ipynb             45 min   K-means + silhouette, bonus GraphFrames
   corriges/                        corrigés (notebooks + scripts .py exécutables)
-quiz/                      quiz des jours 1 et 2 (avec réponses)
-formateur/                 checklists des jours 1 et 2, mode dégradé, mail de prérequis
-scripts/                   generate_data.py, download_official.py, check_env.py, build_notebooks.py
+jour3/                     Spark Streaming et Spark à grande échelle
+  TP9_premier_stream.ipynb         35 min   Structured Streaming, jointure stream-statique, output modes
+  TP10_logs_temps_reel.ipynb       35 min   analyse de logs en temps réel : fenêtres, watermark, append
+  TP11_ml_streaming_catalyst.ipynb 55 min   modèle ML sur un flux, foreachBatch, Catalyst, Tungsten, AQE
+  corriges/                        corrigés (notebooks + scripts .py exécutables)
+quiz/                      quiz des 3 jours (avec réponses) et correction de l'atelier Lambda / Kappa
+formateur/                 checklists des 3 jours, mode dégradé, mail de prérequis
+scripts/                   generate_data.py, download_official.py, stream_simulator.py, check_env.py, build_notebooks.py
 ```
 
 ## Les données

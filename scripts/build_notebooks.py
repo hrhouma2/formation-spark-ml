@@ -325,3 +325,93 @@ write(J2 / "corriges" / "TP5_explorer.ipynb", corrige_from_py(J2 / "corriges" / 
 write(J2 / "corriges" / "TP6_regression.ipynb", corrige_from_py(J2 / "corriges" / "tp6_regression.py", "TP 6 – Prédire le montant"))
 write(J2 / "corriges" / "TP7_classification.ipynb", corrige_from_py(J2 / "corriges" / "tp7_classification.py", "TP 7 – Prédire le pourboire"))
 write(J2 / "corriges" / "TP8_clustering.ipynb", corrige_from_py(J2 / "corriges" / "tp8_clustering.py", "TP 8 – Les familles de courses"))
+
+
+# =============================================================== JOUR 3
+J3 = ROOT / "jour3"
+SESSION_STREAM = '''
+from pyspark.sql import SparkSession, functions as F
+spark = SparkSession.builder.appName("TP").master("local[*]").getOrCreate()
+spark.sparkContext.setLogLevel("ERROR")
+spark.conf.set("spark.sql.shuffle.partitions", "4")     # petit volume : 200 partitions par défaut, c'est trop
+'''
+LANCEMENT = """
+**Avant de commencer**, dans un terminal à la racine du dépôt :
+
+```bash
+python scripts/stream_simulator.py {flux} --reset          # en direct : un fichier toutes les 2 secondes
+# ou, si vous êtes en retard / en mode dégradé :
+python scripts/stream_simulator.py {flux} --all --reset    # tout d'un coup
+```
+"""
+
+tp9 = [
+    md("# TP 9 – Votre premier stream (35 min)\n\n**Objectif** : suivre en direct le chiffre d'affaires et le nombre de courses par arrondissement.\n\n**Réussi si** : le tableau se met à jour à chaque micro-batch.\n" + LANCEMENT.format(flux="courses")),
+    code(RACINE),
+    code(SESSION_STREAM),
+    md("### 1. Lire le dossier `stream/courses` en continu\n\nUn stream exige un **schéma explicite** : prenez celui de `data/trips.parquet` (`spark.read.parquet(...).schema`).\nIndices : `spark.readStream.schema(schema).option(\"maxFilesPerTrigger\", 2).json(\"stream/courses\")`, puis `isStreaming`."),
+    code("schema = ...\ncourses = ...\nprint(courses.isStreaming)"),
+    md("### 2. Jointure stream-statique avec les zones\n\nLe référentiel `data/taxi_zone_lookup.csv` est un DataFrame **statique** ordinaire. Ajoutez la colonne `Borough`."),
+    code("zones = ...\nenrichies = ..."),
+    md("### 3. Chiffre d'affaires et nombre de courses par `Borough`"),
+    code("par_borough = ..."),
+    md("### 4. Démarrer la requête : `outputMode(\"complete\")`, `format(\"console\")`, `trigger(processingTime=\"5 seconds\")`, un `checkpointLocation`\n\nLaissez tourner 60 secondes : `q.awaitTermination(60)`, puis `q.stop()`. Le résultat s'affiche dans le terminal de Jupyter / VS Code."),
+    code("q = (par_borough.writeStream\n     ...\n     .start())\nq.awaitTermination(60)\nq.stop()"),
+    md("### 5. Le suivi : `q.lastProgress`, `q.recentProgress`\n\nCombien de micro-batches ? Combien de lignes par micro-batch (`numInputRows`) ?"),
+    code("..."),
+    md("### Bonus – Le même calcul en **batch** (`spark.read`) sur les mêmes fichiers : obtenez-vous les mêmes comptes ?"),
+    code("..."),
+]
+
+tp10 = [
+    md("# TP 10 – Les logs en temps réel (35 min)\n\nL'application de réservation écrit ses logs dans `stream/logs/`. Une panne survient quelque part dans la matinée.\n\n**Objectif** : la détecter en temps réel.\n\n**Réussi si** : une alerte (taux d'erreur > 10 %) apparaît sur le bon endpoint, aux bonnes minutes.\n" + LANCEMENT.format(flux="logs")),
+    code(RACINE),
+    code(SESSION_STREAM),
+    md("### 1. Lire les logs en continu (`readStream.text`) : une colonne `value` par ligne\n\nExemple de ligne :\n```\n2024-01-15T08:22:03.120 ERROR endpoint=/payment status=503 latency_ms=812 zone=161\n```"),
+    code("brut = ..."),
+    md("### 2. Parser avec `regexp_extract`\n\nMotif fourni :\n```python\nmotif = r\"^(\\S+) +(\\w+) +endpoint=(\\S+) status=(\\d+) latency_ms=(\\d+) zone=(\\d+)$\"\n```\nColonnes : `ts` (`to_timestamp(..., \"yyyy-MM-dd'T'HH:mm:ss.SSS\")`), `niveau`, `endpoint`, `status` (int), `latence_ms` (int)."),
+    code("motif = r\"^(\\S+) +(\\w+) +endpoint=(\\S+) status=(\\d+) latency_ms=(\\d+) zone=(\\d+)$\"\nlogs = brut.select(\n    ...\n)"),
+    md("### 3. Watermark de 2 minutes, fenêtre de 1 minute par `endpoint`\n\nCalculer : `requetes` (count), `erreurs` (status >= 500), `taux_erreur`, `latence_p95` (`percentile_approx(latence_ms, 0.95)`)."),
+    code("par_minute = (logs\n    .withWatermark(...)\n    .groupBy(...)\n    .agg(...))"),
+    md("### 4. Écrire en mode **append** vers Parquet (`out/tp10/par_minute`), avec un checkpoint\n\nEn direct : `trigger(processingTime=\"5 seconds\")` et `awaitTermination(120)`. Avec `--all` : `trigger(availableNow=True)`."),
+    code("q = ..."),
+    md("### 5. Lire le Parquet (en batch) et afficher les alertes : taux d'erreur > 10 %\n\nQuel endpoint ? À quelles minutes ? Que devient la latence p95 ?"),
+    code("..."),
+    md("### 6. Combien de lignes ont été ignorées par le watermark ?\n\nIndice : `q.recentProgress`, champ `stateOperators[0][\"numRowsDroppedByWatermark\"]`.\n\nPourquoi les toutes dernières minutes n'apparaissent-elles pas dans le Parquet ?"),
+    code("..."),
+    md("### Bonus – Fenêtre glissante de 5 minutes, toutes les minutes : l'alerte est-elle plus stable ?"),
+    code("..."),
+]
+
+tp11 = [
+    md("# TP 11 – Le modèle de pourboire en temps réel, puis sous le capot (55 min)\n\n**Objectif** : appliquer sur le flux de courses le modèle entraîné au TP 7, puis lire et comparer des plans d'exécution.\n\n**Réussi si** : des prédictions sont produites en continu et vous savez expliquer le plan.\n" + LANCEMENT.format(flux="courses")),
+    code(RACINE),
+    code(SESSION_STREAM + '''
+from pyspark.ml import PipelineModel
+from pyspark.ml.functions import vector_to_array
+import time
+zones = spark.read.csv("data/taxi_zone_lookup.csv", header=True, inferSchema=True).select(
+    F.col("LocationID").alias("PULocationID"), "Borough")'''),
+    md("### 1. La préparation des features, dans UNE fonction (la même qu'au TP 7)\n\nCarte uniquement, `heure`, `manhattan`, `nuit`, `label` (pourboire > 0)."),
+    code("def features(df):\n    return (df.filter(\"trip_distance > 0 AND payment_type = 1\")\n              ...)"),
+    md("### 2. Recharger le modèle du TP 7 : `PipelineModel.load(\"out/modele_pourboire\")`\n\nS'il n'existe pas, lancez d'abord `python jour2/corriges/tp7_classification.py`."),
+    code("modele = ..."),
+    md("### 3. Appliquer le modèle sur le flux\n\n`modele.transform(features(flux))`, puis `p_pourboire` = `vector_to_array(\"probability\")[1]`."),
+    code("schema = spark.read.parquet(\"data/trips.parquet\").schema\nflux = ...\npredictions = ..."),
+    md("### 4. Taux de pourboire **prédit** (moyenne de `p_pourboire`) vs **réel** (moyenne de `label`), par fenêtre de 30 min et par `Borough`\n\nWatermark de 10 minutes sur `ts` = `tpep_pickup_datetime` converti en timestamp. Pourquoi la moyenne des probabilités et pas des prédictions 0/1 ?"),
+    code("suivi = ..."),
+    md("### 5. `foreachBatch` : pour chaque micro-batch, écrire en Parquet (`out/tp11/suivi`) et afficher le nombre de fenêtres"),
+    code("def traiter(batch_df, batch_id):\n    ...\n\nq = ..."),
+    md("### 6. Sous le capot : `explain(\"formatted\")` sur la même requête, en CSV puis en Parquet\n\n```python\nrequete = lambda df: df.filter(\"trip_distance > 10\").groupBy(\"PULocationID\").agg(F.avg(\"total_amount\"))\n```\nComparez `PushedFilters`, `ReadSchema`, `Batched`. Mesurez le temps de chaque version (3 exécutions)."),
+    code("..."),
+    md("### 7. AQE : exécutez la requête Parquet, puis `explain()`. Trouvez `isFinalPlan=true` et `AQEShuffleRead`. Combien de blocs `*(n)` (whole-stage codegen) ?"),
+    code("..."),
+    md("### Bonus – Spark UI, onglet **Structured Streaming** : débit, durée des micro-batches, lignes d'état"),
+]
+
+write(J3 / "TP9_premier_stream.ipynb", tp9)
+write(J3 / "TP10_logs_temps_reel.ipynb", tp10)
+write(J3 / "TP11_ml_streaming_catalyst.ipynb", tp11)
+write(J3 / "corriges" / "TP9_premier_stream.ipynb", corrige_from_py(J3 / "corriges" / "tp9_premier_stream.py", "TP 9 – Premier stream"))
+write(J3 / "corriges" / "TP10_logs_temps_reel.ipynb", corrige_from_py(J3 / "corriges" / "tp10_logs_temps_reel.py", "TP 10 – Logs en temps réel"))
+write(J3 / "corriges" / "TP11_ml_streaming_catalyst.ipynb", corrige_from_py(J3 / "corriges" / "tp11_ml_streaming_catalyst.py", "TP 11 – ML en temps réel et plans"))
