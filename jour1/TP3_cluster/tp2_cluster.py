@@ -1,6 +1,6 @@
 # TP 3 – Le TP 2 sur un cluster Standalone, données lues depuis HDFS (ou en local)
 #
-#   spark-submit --master spark://localhost:7077 jour1/TP3_cluster/tp2_cluster.py hdfs://localhost:9000/data
+#   spark-submit --master spark://localhost:7077 jour1/TP3_cluster/tp2_cluster.py hdfs://namenode:8020/data   # partie B (docker compose)
 #   spark-submit --master spark://localhost:7077 jour1/TP3_cluster/tp2_cluster.py data        # sans HDFS (mode dégradé)
 #
 # Le code métier est IDENTIQUE au TP 2 : seuls --master et le chemin des données changent.

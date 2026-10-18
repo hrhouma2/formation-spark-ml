@@ -69,11 +69,14 @@ print("Courbe ROC : out/tp7/roc.png")
 rf_model.write().overwrite().save("out/modele_pourboire")
 
 # %% Bonus – CrossValidator : chercher les meilleurs hyperparamètres (3 plis × 4 combinaisons = 12 entraînements)
+#    La grille doit porter sur les Params de l'estimateur NEUF placé dans le pipeline : un Param n'est reconnu que si
+#    son parent (uid) est cet estimateur. Écrite sur `rf` (le modèle déjà ajusté), elle serait ignorée sans erreur.
+rf_est = RandomForestClassifier(seed=1)
 grille = (ParamGridBuilder()
-          .addGrid(rf.numTrees, [20, 50])
-          .addGrid(rf.maxDepth, [4, 8])
+          .addGrid(rf_est.numTrees, [20, 50])
+          .addGrid(rf_est.maxDepth, [4, 8])
           .build())
-cv = CrossValidator(estimator=Pipeline(stages=[assembleur, normalisation, RandomForestClassifier(seed=1)]),
+cv = CrossValidator(estimator=Pipeline(stages=[assembleur, normalisation, rf_est]),
                     estimatorParamMaps=grille, evaluator=auc, numFolds=3, seed=1)
 cv_model = cv.fit(train)
 best = cv_model.bestModel.stages[-1]
